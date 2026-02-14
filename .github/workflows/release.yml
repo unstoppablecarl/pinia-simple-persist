@@ -62,4 +62,5 @@ jobs:
       - name: Publish
         id: publish
         run: |
-          pnpm publish --access public
+          npm install -g npm@latest
+          pnpm publish --access public --provenance --no-git-checks
