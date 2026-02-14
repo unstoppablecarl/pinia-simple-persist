@@ -20,7 +20,6 @@ export function makeSimplePersistMapper<T extends Record<string, any>>(
           value = item
         }
 
-        // Strip reactivity for serialization
         out[key] = isReactive(value) ? toRaw(value) : value
       }
       return out
@@ -35,7 +34,6 @@ export function makeSimplePersistMapper<T extends Record<string, any>>(
         if (isRef(item)) {
           item.value = data[key]
         } else if (isReactive(item)) {
-          // Update reactive object properties in place
           Object.assign(item, data[key])
         }
       }

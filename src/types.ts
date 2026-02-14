@@ -1,4 +1,4 @@
-import type { PersistOptions } from './index'
+import type { SimplePersistOptions } from './index'
 
 /**
  * Synchronous storage based on Web Storage API.
@@ -34,7 +34,7 @@ export interface Serializer<T> {
 
 declare module 'pinia' {
   export interface DefineStoreOptionsBase<S, Store> {
-    persist?: PersistOptions<any> | boolean
+    persist?: SimplePersistOptions<any> | boolean
   }
 
   export interface PiniaCustomProperties {

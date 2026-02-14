@@ -792,7 +792,7 @@ describe('createPiniaSimplePersist', () => {
 
       const plugin = createPiniaSimplePersist({
         storage: mockStorage,
-        onError,
+        onRestoreError: onError,
       })
       pinia.use(plugin)
 
@@ -825,7 +825,7 @@ describe('createPiniaSimplePersist', () => {
 
       const plugin = createPiniaSimplePersist({
         storage: mockStorage,
-        onError: globalOnError,
+        onRestoreError: globalOnError,
       })
       pinia.use(plugin)
 
@@ -841,7 +841,7 @@ describe('createPiniaSimplePersist', () => {
         }
       }, {
         persist: {
-          onError: storeOnError,
+          onRestoreError: storeOnError,
         },
       })
 
@@ -858,7 +858,7 @@ describe('createPiniaSimplePersist', () => {
       const plugin = createPiniaSimplePersist({
         storage: mockStorage,
         afterRestore,
-        onError,
+        onRestoreError: onError,
       })
       pinia.use(plugin)
 
@@ -895,7 +895,7 @@ describe('createPiniaSimplePersist', () => {
       const plugin = createPiniaSimplePersist({
         storage: mockStorage,
         serializer: customSerializer,
-        onError,
+        onRestoreError: onError,
       })
       pinia.use(plugin)
 
