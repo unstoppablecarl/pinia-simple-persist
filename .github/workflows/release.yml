@@ -33,7 +33,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.14.0'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Get pnpm store directory
         shell: bash
@@ -63,4 +62,4 @@ jobs:
         id: publish
         run: |
           npm install -g npm@latest
-          pnpm publish --access public --provenance --no-git-checks
+          npm publish --access public --provenance
