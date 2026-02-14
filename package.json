@@ -1,7 +1,7 @@
 {
   "name": "pinia-simple-persist",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "packageManager": "pnpm@10.16.0",
   "description": "Simple pinia persistence without using $patch",
   "author": {
