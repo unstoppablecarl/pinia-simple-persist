@@ -1,0 +1,89 @@
+{
+  "name": "pinia-simple-persist",
+  "type": "module",
+  "version": "0.0.1",
+  "packageManager": "pnpm@10.16.0",
+  "description": "Simple pinia persistence without using $patch",
+  "author": {
+    "name": "Carl Olsen",
+    "email": "unstoppablecarlolsen@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "vue",
+    "pinia",
+    "persist",
+    "data"
+  ],
+  "main": "./dist/index.prod.cjs",
+  "module": "./dist/index.prod.js",
+  "source": "./src/index.ts",
+  "types": "./dist/index.prod.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.prod.d.ts",
+      "development": {
+        "require": "./dist/index.dev.cjs",
+        "import": "./dist/index.dev.js"
+      },
+      "production": {
+        "require": "./dist/index.prod.cjs",
+        "import": "./dist/index.prod.js"
+      },
+      "require": "./dist/index.prod.cjs",
+      "import": "./dist/index.prod.js"
+    }
+  },
+  "files": [
+    "dist/*",
+    "src/*",
+    "pnpm-lock.yaml",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest --coverage",
+    "test:mutation": "stryker run"
+  },
+  "size-limit": [
+    {
+      "path": "dist/index.js",
+      "limit": "1 KB"
+    },
+    {
+      "path": "dist/index.cjs",
+      "limit": "1.4 KB"
+    }
+  ],
+  "peerDependencies": {
+    "pinia": ">=2.2.2",
+    "vue": "^3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^9.1.1",
+    "@stryker-mutator/typescript-checker": "^9.1.1",
+    "@stryker-mutator/vitest-runner": "^9.1.1",
+    "@types/node": "^24.5.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "esbuild": "^0.25.10",
+    "happy-dom": "^20.6.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "3.2.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/unstoppablecarl/pinia-simple-persist.git"
+  },
+  "bugs": {
+    "url": "https://github.com/unstoppablecarl/pinia-simple-persist/issues"
+  }
+}
