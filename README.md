@@ -4,13 +4,13 @@ A Simple [Pinia](https://pinia.vuejs.org/) persistence plugin without using $pat
 
 ## Purpose
 
-Most pinia state persistence plugins use `store.$patch()`. 
+Most pinia state persistence plugins use `store.$patch()`.
 This has many limitations and can create [hard to solve bugs](https://github.com/vuejs/pinia/issues?q=store.%24patch).
 Pinia Simple Persist gives complete control over how state data is handled without using `store.$patch()`.
 
 ## Installation
 
-`$ npm i pinia-scope`
+`$ npm i pinia-simple-persist`
 
 Attach pinia scope to the pinia instance in your `main.js` file.
 
@@ -64,7 +64,7 @@ export const useMyStore = defineStore('my', () => {
     count: count.value,
     obj: { ...toRaw(obj) },
   }
-  
+
   const mapper = makeSimplePersistMapper<SerializedData>(
     state,
     defaults,
