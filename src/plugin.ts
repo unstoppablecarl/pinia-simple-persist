@@ -1,25 +1,27 @@
-import type { PiniaPluginContext } from 'pinia'
 import 'pinia'
-import type { Serializer, StorageLike } from './types'
+import type { PiniaPluginContext } from 'pinia'
+import type { MaybePromise, Serializer, StorageLike } from './types'
 
 export type BaseSimplePersistOptions<Serialized> = {
   storage?: StorageLike
-  serializer?: Serializer<Serialized>,
+  serializer?: Serializer<Serialized>
   debounce?: number
   beforeRestore?: (context: PiniaPluginContext) => void
-  afterRestore?: (context: PiniaPluginContext) => void,
-  onRestoreError?: (err: Error) => void,
+  afterRestore?: (context: PiniaPluginContext) => void
+  onRestoreError?: (err: Error) => void
 }
 
 export type GlobalSimplePersistOptions = BaseSimplePersistOptions<any> & {
-  makeKey?: (storeId: string) => string,
+  makeKey?: (storeId: string) => string
 }
 
 export type SimplePersistOptions<Serialized> = BaseSimplePersistOptions<Serialized> & {
-  key?: string,
+  key?: string
 }
 
-export function createPiniaSimplePersist(globalOptions: GlobalSimplePersistOptions = {}) {
+export function createPiniaSimplePersist(
+  globalOptions: GlobalSimplePersistOptions = {},
+) {
   const makeKey = globalOptions.makeKey ?? ((id: string) => `pinia-${id}`)
 
   return (context: PiniaPluginContext) => {
@@ -29,6 +31,7 @@ export function createPiniaSimplePersist(globalOptions: GlobalSimplePersistOptio
     ensureStoreHasSerializeState(store)
 
     const persist = options.persist as SimplePersistOptions<any> | undefined
+
     if (!persist) return
 
     const {
@@ -44,14 +47,17 @@ export function createPiniaSimplePersist(globalOptions: GlobalSimplePersistOptio
       onRestoreError,
     } = { ...globalOptions, ...persist }
 
-    const restoreState = () => {
+    const restoreState = async () => {
       beforeRestore?.(context)
 
-      const stored = storage.getItem(key)
+      // Await the potentially async getItem call
+      const stored = await storage.getItem(key)
+
       if (!stored) return
 
       try {
         const data = serializer.deserialize(stored)
+
         store.$restoreState(data)
         afterRestore?.(context)
       } catch (error) {
@@ -63,36 +69,42 @@ export function createPiniaSimplePersist(globalOptions: GlobalSimplePersistOptio
       }
     }
 
-    const saveState = () => {
+    const saveState = async () => {
       const state = store.$serializeState()
+
       const serialized = serializer.serialize(state)
-      storage.setItem(key, serialized)
+
+      // Await the potentially async setItem call
+      await storage.setItem(key, serialized)
     }
 
-    let finalSave = saveState
+    let finalSave: () => MaybePromise<void> = saveState
     let cleanupDebounce: (() => void) | undefined
 
     if (debounce) {
       const { debouncedFn, cleanup } = makeDebounce(saveState, debounce)
+
       finalSave = debouncedFn
       cleanupDebounce = cleanup
     }
 
-    // Watch for changes and persist
     const unsubscribe = store.$subscribe(() => {
       finalSave()
     }, { detached: true })
 
-    // Cleanup on store disposal
     const originalDispose = store.$dispose
+
     store.$dispose = function() {
       unsubscribe()
       cleanupDebounce?.()
       originalDispose.call(this)
     }
 
-    // Restore state on initialization
-    restoreState()
+    const restorePromise = restoreState()
+
+    return {
+      $isRestored: restorePromise,
+    }
   }
 }
 

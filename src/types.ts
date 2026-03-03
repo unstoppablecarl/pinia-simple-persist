@@ -1,5 +1,7 @@
 import type { SimplePersistOptions } from './index'
 
+export type MaybePromise<T> = T | Promise<T>
+
 /**
  * Synchronous storage based on Web Storage API.
  * @see https://developer.mozilla.org/en-US/docs/Web/API/Storage
@@ -8,12 +10,12 @@ export interface StorageLike {
   /**
    * Get a key's value if it exists.
    */
-  getItem: (key: string) => string | null
+  getItem: (key: string) => MaybePromise<string | null>
 
   /**
    * Set a key with a value, or update it if it exists.
    */
-  setItem: (key: string, value: string) => void
+  setItem: (key: string, value: string) => MaybePromise<void>
 }
 
 export interface Serializer<T> {
@@ -41,5 +43,6 @@ declare module 'pinia' {
     $persist: () => void
     $restoreState?: (data: any) => void
     $serializeState?: () => any
+    $isRestored: Promise<void>
   }
 }

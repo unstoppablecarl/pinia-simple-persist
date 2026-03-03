@@ -1,8 +1,9 @@
-import { createPinia, defineStore, setActivePinia } from 'pinia'
+import { createPinia, defineStore, type Pinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, createApp, reactive, ref } from 'vue'
 import { createPiniaSimplePersist } from '../src'
-import { makeSimplePersistMapper } from '../src/mapper'
+import { makeSimplePersistMapper } from '../src'
+import type { StorageLike } from '../src/types'
 
 function initializeLocalStorage(
   KEY: string,
@@ -113,11 +114,11 @@ describe('createPiniaSimplePersist', () => {
       expect(mockStorage.setItem).toHaveBeenCalledTimes(1)
       expect(mockStorage.setItem).toHaveBeenCalledWith(
         'pinia-persisted',
-        JSON.stringify({ value: 200 })
+        JSON.stringify({ value: 200 }),
       )
       expect(mockStorage.setItem).not.toHaveBeenCalledWith(
         'pinia-non-persisted',
-        expect.anything()
+        expect.anything(),
       )
     })
 
@@ -151,7 +152,7 @@ describe('createPiniaSimplePersist', () => {
       )
     })
 
-    it('should restore state from storage on initialization', () => {
+    it('should restore state from storage on initialization', async () => {
       storageData['pinia-test'] = JSON.stringify({ count: 99 })
 
       const plugin = createPiniaSimplePersist({
@@ -174,7 +175,7 @@ describe('createPiniaSimplePersist', () => {
       })
 
       const store = useTestStore()
-
+      await Promise.resolve()
       expect(store.count).toBe(99)
       expect(mockStorage.getItem).toHaveBeenCalledWith('pinia-test')
     })
@@ -383,7 +384,7 @@ describe('createPiniaSimplePersist', () => {
       )
     })
 
-    it('should deserialize with custom serializer on restore', () => {
+    it('should deserialize with custom serializer on restore', async () => {
       const customSerializer = {
         serialize: vi.fn((data: any) => `custom-${JSON.stringify(data)}`),
         deserialize: vi.fn((str: string) => JSON.parse(str.replace('custom-', ''))),
@@ -412,7 +413,7 @@ describe('createPiniaSimplePersist', () => {
       })
 
       const store = useTestStore()
-
+      await Promise.resolve()
       expect(customSerializer.deserialize).toHaveBeenCalledWith('custom-{"count":99}')
       expect(store.count).toBe(99)
     })
@@ -653,7 +654,7 @@ describe('createPiniaSimplePersist', () => {
       )
     })
 
-    it('should call afterRestore hook', () => {
+    it('should call afterRestore hook', async () => {
       const afterRestore = vi.fn()
       storageData['pinia-test'] = JSON.stringify({ count: 99 })
 
@@ -678,7 +679,7 @@ describe('createPiniaSimplePersist', () => {
       })
 
       const store = useTestStore()
-
+      await Promise.resolve()
       expect(afterRestore).toHaveBeenCalledTimes(1)
       expect(afterRestore).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -688,7 +689,7 @@ describe('createPiniaSimplePersist', () => {
       )
     })
 
-    it('should call hooks from store options over global options', () => {
+    it('should call hooks from store options over global options', async () => {
       const globalBeforeRestore = vi.fn()
       const globalAfterRestore = vi.fn()
       const storeBeforeRestore = vi.fn()
@@ -720,8 +721,8 @@ describe('createPiniaSimplePersist', () => {
         },
       })
 
-      const store = useTestStore()
-
+      useTestStore()
+      await Promise.resolve()
       expect(globalBeforeRestore).not.toHaveBeenCalled()
       expect(globalAfterRestore).not.toHaveBeenCalled()
       expect(storeBeforeRestore).toHaveBeenCalledTimes(1)
@@ -753,7 +754,7 @@ describe('createPiniaSimplePersist', () => {
         persist: {},
       })
 
-      const store = useTestStore()
+      useTestStore()
 
       expect(beforeRestore).toHaveBeenCalledTimes(1)
       expect(afterRestore).not.toHaveBeenCalled()
@@ -761,29 +762,94 @@ describe('createPiniaSimplePersist', () => {
   })
 
   describe('error handling', () => {
-    it('should throw if deserialize fails and no onError handler', () => {
+    it('should throw if deserialize fails and no onError handler', async () => {
       storageData['pinia-test'] = 'invalid-json'
 
       const plugin = createPiniaSimplePersist({
         storage: mockStorage,
+        // No onRestoreError provided
       })
+
       pinia.use(plugin)
 
-      const useTestStore = defineStore('test', () => {
-        const count = ref(0)
-
-        return {
-          count,
-          $serializeState: () => ({ count: count.value }),
-          $restoreState: (data: any) => {
+      const useTestStore = defineStore(
+        'test',
+        () => {
+          const count = ref(0)
+          const $serializeState = () => ({ count: count.value })
+          const $restoreState = (data: any) => {
             count.value = data.count
-          },
-        }
-      }, {
-        persist: {},
+          }
+
+          return {
+            count,
+            $serializeState,
+            $restoreState,
+          }
+        },
+        { persist: {} },
+      )
+
+      const store = useTestStore()
+      await Promise.resolve()
+      await expect(store.$isRestored).rejects.toThrow(SyntaxError)
+    })
+
+    it('should call onError handler on deserialization error', async () => {
+      const onError = vi.fn()
+
+      // The key here must match the store ID below
+      storageData['pinia-test'] = 'invalid-json'
+
+      const plugin = createPiniaSimplePersist({
+        storage: mockStorage,
+        onRestoreError: onError,
       })
 
-      expect(() => useTestStore()).toThrow()
+      pinia.use(plugin)
+
+      // Changed 'user' back to 'test' to match the storage key
+      const useTestStore = defineStore(
+        'test',
+        () => {
+          const name = ref('Guest')
+
+          const age = ref(0)
+
+          const $serializeState = () => {
+            return {
+              name: name.value,
+              age: age.value,
+            }
+          }
+
+          const $restoreState = (
+            data: any,
+          ) => {
+            name.value = data.name
+            age.value = data.age
+          }
+
+          return {
+            name,
+            age,
+            $serializeState,
+            $restoreState,
+          }
+        },
+        {
+          persist: {},
+        },
+      )
+
+      useTestStore()
+
+      // One tick is all we need now that it doesn't exit early
+      await Promise.resolve()
+
+      expect(onError).toHaveBeenCalledTimes(1)
+
+      expect(onError).toHaveBeenCalledWith(expect.any(Error))
     })
 
     it('should call onError handler on deserialization error', async () => {
@@ -812,13 +878,14 @@ describe('createPiniaSimplePersist', () => {
 
       await Promise.resolve()
       expect(() => useTestStore()).not.toThrow()
+      await Promise.resolve()
       expect(onError).toHaveBeenCalledTimes(1)
       expect(onError).toHaveBeenCalledWith(
         expect.any(Error),
       )
     })
 
-    it('should prefer store onError over global onError', () => {
+    it('should prefer store onError over global onError', async () => {
       const globalOnError = vi.fn()
       const storeOnError = vi.fn()
       storageData['pinia-test'] = 'invalid-json'
@@ -846,11 +913,12 @@ describe('createPiniaSimplePersist', () => {
       })
 
       expect(() => useTestStore()).not.toThrow()
+      await Promise.resolve()
       expect(globalOnError).not.toHaveBeenCalled()
       expect(storeOnError).toHaveBeenCalledTimes(1)
     })
 
-    it('should not call afterRestore on deserialization error', () => {
+    it('should not call afterRestore on deserialization error', async () => {
       const afterRestore = vi.fn()
       const onError = vi.fn()
       storageData['pinia-test'] = 'invalid-json'
@@ -876,8 +944,9 @@ describe('createPiniaSimplePersist', () => {
         persist: {},
       })
 
-      const store = useTestStore()
+      useTestStore()
 
+      await Promise.resolve()
       expect(onError).toHaveBeenCalledTimes(1)
       expect(afterRestore).not.toHaveBeenCalled()
     })
@@ -1010,12 +1079,13 @@ describe('createPiniaSimplePersist', () => {
       })
 
       const store = useTestStore()
+      await Promise.resolve()
+
       store.count = 42
       await Promise.resolve()
 
       expect(localStorage.getItem).toHaveBeenCalled()
       expect(localStorage.setItem).toHaveBeenCalled()
-
       const stored = readLocalStorage(KEY)
       expect(stored).toEqual({ count: 42 })
     })
@@ -1097,7 +1167,7 @@ describe('createPiniaSimplePersist', () => {
       expect(mockStorage.setItem).not.toHaveBeenCalled()
     })
 
-    it('should restore from localStorage on initialization', () => {
+    it('should restore from localStorage on initialization', async () => {
       const KEY = 'pinia-test'
       initializeLocalStorage(KEY, { count: 99 })
 
@@ -1120,6 +1190,7 @@ describe('createPiniaSimplePersist', () => {
 
       const store = useTestStore()
 
+      await Promise.resolve()
       expect(store.count).toBe(99)
     })
   })
@@ -1287,7 +1358,7 @@ describe('createPiniaSimplePersist', () => {
       )
     })
 
-    it('should restore reactive objects', () => {
+    it('should restore reactive objects', async () => {
       storageData['pinia-test'] = JSON.stringify({ user: { name: 'Jane', age: 25 } })
 
       const plugin = createPiniaSimplePersist({
@@ -1311,7 +1382,7 @@ describe('createPiniaSimplePersist', () => {
       })
 
       const store = useTestStore()
-
+      await Promise.resolve()
       expect(store.user.name).toBe('Jane')
       expect(store.user.age).toBe(25)
     })
@@ -1489,7 +1560,7 @@ describe('makeSimplePersistMapper', () => {
 
     const mapper = makeSimplePersistMapper(
       { user },
-      { user: { name: 'Default', age: 0 } }
+      { user: { name: 'Default', age: 0 } },
     )
 
     // Change the values
@@ -1508,7 +1579,7 @@ describe('makeSimplePersistMapper', () => {
 
     const mapper = makeSimplePersistMapper(
       { plain: plainValue as any },
-      { plain: { value: 0 } }
+      { plain: { value: 0 } },
     )
 
     // This should hit the implicit else case (do nothing)
@@ -1516,5 +1587,121 @@ describe('makeSimplePersistMapper', () => {
 
     // Since it's not a ref or reactive, it won't be updated
     expect(plainValue.value).toBe(42)
+  })
+
+  describe('asynchronous storage', () => {
+    let asyncStorageData: Record<string, string>
+    let mockAsyncStorage: StorageLike
+    let pinia: Pinia
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      asyncStorageData = {}
+
+      // Creating a mock that returns Promises to simulate
+      // IndexedDB or a remote API
+      mockAsyncStorage = {
+        getItem: vi.fn(async (key: string) => {
+          // Simulate network/disk delay
+          await new Promise((resolve) => setTimeout(resolve, 10))
+
+          return asyncStorageData[key] ?? null
+        }),
+        setItem: vi.fn(async (key: string, value: string) => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+
+          asyncStorageData[key] = value
+        }),
+      }
+      const app = createApp({})
+
+      pinia = createPinia()
+      app.use(pinia)
+      setActivePinia(pinia)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('should wait for async getItem during initialization', async () => {
+      const KEY = 'pinia-async-test'
+
+      const DATA = JSON.parse(
+        JSON.stringify({ count: 123 }),
+      )
+
+      asyncStorageData[KEY] = JSON.stringify(DATA)
+
+      const plugin = createPiniaSimplePersist({
+        storage: mockAsyncStorage,
+      })
+
+      pinia.use(plugin)
+
+      const useAsyncStore = defineStore('async-test', () => {
+        const count = ref(0)
+
+        return {
+          count,
+          $serializeState: () => ({ count: count.value }),
+          $restoreState: (data: any) => {
+            count.value = data.count
+          },
+        }
+      }, {
+        persist: {
+          key: KEY,
+        },
+      })
+
+      const store = useAsyncStore()
+
+      // Initially 0 because the promise hasn't resolved
+      expect(store.count).toBe(0)
+
+      // Wait for the restoreState microtasks and timers
+      await vi.runAllTimersAsync()
+
+      expect(store.count).toBe(123)
+      expect(mockAsyncStorage.getItem).toHaveBeenCalledWith(KEY)
+    })
+
+    it('should wait for async setItem when state changes', async () => {
+      const plugin = createPiniaSimplePersist({
+        storage: mockAsyncStorage,
+      })
+
+      pinia.use(plugin)
+
+      const useAsyncStore = defineStore('async-save', () => {
+        const value = ref('initial')
+
+        return {
+          value,
+          $serializeState: () => ({ value: value.value }),
+          $restoreState: (data: any) => {
+            value.value = data.value
+          },
+        }
+      }, {
+        persist: {},
+      })
+
+      const store = useAsyncStore()
+
+      store.value = 'updated'
+
+      // We need to wait for the $subscribe microtask
+      // and the internal async saveState
+      await vi.runAllTimersAsync()
+
+      expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
+        'pinia-async-save',
+        JSON.stringify({ value: 'updated' }),
+      )
+
+      expect(asyncStorageData['pinia-async-save']).toContain('updated')
+    })
   })
 })
