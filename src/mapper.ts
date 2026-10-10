@@ -16,7 +16,27 @@ function cloneDefault<T>(value: T): T {
   return raw
 }
 
+function getStateDefaults<T extends Record<string, any>>(
+  state: { [K in keyof T]: RefOrReactive<T[K]> },
+  overrides: Partial<NoInfer<T>> = {},
+): T {
+  const out = {} as T
+  for (const key in state) {
+    const item = state[key]
+    const value = key in overrides ? overrides[key] : isRef(item) ? item.value : item
+    out[key] = cloneDefault(value as T[typeof key])
+  }
+  return out
+}
+
 export function makeSimplePersistMapper<T extends Record<string, any>>(
+  state: { [K in keyof T]: RefOrReactive<T[K]> },
+  overrides: Partial<NoInfer<T>> = {},
+) {
+  return makeSimplePersistMapperRaw(state, getStateDefaults(state, overrides))
+}
+
+export function makeSimplePersistMapperRaw<T extends Record<string, any>>(
   state: { [K in keyof T]: RefOrReactive<T[K]> },
   defaults: T,
 ) {

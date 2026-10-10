@@ -1,8 +1,8 @@
 import { createPinia, defineStore, type Pinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computed, createApp, reactive, ref } from 'vue'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { computed, createApp, reactive, ref, toRaw } from 'vue'
 import { createPiniaSimplePersist } from '../src'
-import { makeSimplePersistMapper } from '../src'
+import { makeSimplePersistMapper, makeSimplePersistMapperRaw } from '../src'
 import type { StorageLike } from '../src/types'
 
 function initializeLocalStorage(
@@ -1736,5 +1736,218 @@ describe('makeSimplePersistMapper', () => {
 
       expect(asyncStorageData['pinia-async-save']).toContain('updated')
     })
+  })
+})
+
+describe('makeSimplePersistMapper auto defaults', () => {
+  it('should reset refs and reactive objects to their initial values', () => {
+    const count = ref(5)
+    const obj = reactive({ foo: 'bar', nested: { list: [1, 2] } })
+
+    const mapper = makeSimplePersistMapper({ count, obj })
+
+    count.value = 99
+    obj.foo = 'changed'
+    obj.nested.list.push(3)
+    mapper.$reset()
+
+    expect(count.value).toBe(5)
+    expect(toRaw(obj)).toEqual({ foo: 'bar', nested: { list: [1, 2] } })
+  })
+
+  it('should not share references between state and defaults', () => {
+    const list = ref([{ id: 1 }])
+
+    const mapper = makeSimplePersistMapper({ list })
+
+    list.value[0].id = 2
+    mapper.$reset()
+    list.value[0].id = 3
+    mapper.$reset()
+
+    expect(list.value).toEqual([{ id: 1 }])
+  })
+
+  it('should merge overrides with auto defaults', () => {
+    const name = ref('current')
+    const count = ref(10)
+    const obj = reactive({ foo: 'bar' })
+
+    const mapper = makeSimplePersistMapper({ name, count, obj }, { name: '', obj: { foo: 'baz' } })
+
+    count.value = 1
+    mapper.$reset()
+
+    expect(name.value).toBe('')
+    expect(count.value).toBe(10)
+    expect(obj.foo).toBe('baz')
+  })
+
+  it('should not share references with overrides', () => {
+    const obj = ref({ items: [] as number[] })
+    const overrides = { obj: { items: [1] } }
+
+    const mapper = makeSimplePersistMapper({ obj }, overrides)
+    mapper.$reset()
+    obj.value.items.push(2)
+
+    expect(overrides.obj.items).toEqual([1])
+  })
+
+  it('should use an override even when it is undefined', () => {
+    const name = ref<string | undefined>('x')
+
+    const mapper = makeSimplePersistMapper({ name }, { name: undefined })
+    mapper.$reset()
+
+    expect(name.value).toBeUndefined()
+  })
+
+  it('should not read state for keys that are overridden', () => {
+    const getter = vi.fn(() => 1)
+    const count = computed(getter)
+
+    makeSimplePersistMapper({ count: count as any }, { count: 0 })
+
+    expect(getter).not.toHaveBeenCalled()
+  })
+
+  it('should snapshot defaults when the mapper is created', () => {
+    const count = ref(1)
+    count.value = 2
+
+    const mapper = makeSimplePersistMapper({ count })
+    count.value = 3
+    mapper.$reset()
+
+    expect(count.value).toBe(2)
+  })
+
+  it('should handle null and primitive defaults', () => {
+    const empty = ref<string | null>(null)
+    const flag = ref(false)
+    const count = ref(0)
+
+    const mapper = makeSimplePersistMapper({ empty, flag, count })
+
+    empty.value = 'x'
+    flag.value = true
+    count.value = 5
+    mapper.$reset()
+
+    expect(empty.value).toBeNull()
+    expect(flag.value).toBe(false)
+    expect(count.value).toBe(0)
+  })
+
+  it('should keep non-plain objects by reference instead of cloning them', () => {
+    class Point {
+      constructor(public x: number) {}
+    }
+    const date = new Date(0)
+    const point = new Point(1)
+    const map = new Map([['a', 1]])
+    const state = { date: ref(date), point: ref(point), map: ref(map) }
+
+    const mapper = makeSimplePersistMapper(state)
+
+    state.date.value = new Date(1)
+    state.point.value = new Point(2)
+    state.map.value = new Map()
+    mapper.$reset()
+
+    expect(toRaw(state.date.value)).toBe(date)
+    expect(toRaw(state.point.value)).toBe(point)
+    expect(state.point.value).toBeInstanceOf(Point)
+    expect(toRaw(state.map.value)).toBe(map)
+  })
+
+  it('should deep clone nested arrays and objects inside reactive state', () => {
+    const obj = reactive({ rows: [{ tags: ['a'] }] })
+
+    const mapper = makeSimplePersistMapper({ obj })
+
+    obj.rows[0].tags.push('b')
+    obj.rows.push({ tags: [] })
+    mapper.$reset()
+
+    expect(toRaw(obj)).toEqual({ rows: [{ tags: ['a'] }] })
+
+    obj.rows[0].tags.push('c')
+    mapper.$reset()
+
+    expect(toRaw(obj)).toEqual({ rows: [{ tags: ['a'] }] })
+  })
+
+  it('should not modify plain (non-ref, non-reactive) state items on reset', () => {
+    const plain = { value: 42 }
+
+    const mapper = makeSimplePersistMapper({ plain: plain as any }, { plain: { value: 0 } })
+    mapper.$reset()
+
+    expect(plain.value).toBe(42)
+  })
+
+  it('should reject overrides with the wrong type', () => {
+    const count = ref(0)
+
+    // @ts-expect-error count must be a number
+    makeSimplePersistMapper({ count }, { count: 'bad' })
+  })
+
+  it('should infer the serialized type from state', () => {
+    const count = ref(0)
+    const obj = reactive({ foo: 'bar' })
+
+    const mapper = makeSimplePersistMapper({ count, obj })
+
+    expectTypeOf(mapper.$serializeState()).toEqualTypeOf<{ count: number, obj: { foo: string } }>()
+  })
+})
+
+describe('makeSimplePersistMapperRaw', () => {
+  it('should require a complete defaults object', () => {
+    const count = ref(0)
+    const name = ref('')
+
+    // @ts-expect-error name is missing
+    makeSimplePersistMapperRaw({ count, name }, { count: 0 })
+  })
+
+  it('should not share references with the given defaults', () => {
+    const obj = reactive({ list: [1] })
+    const defaults = { obj: { list: [2] } }
+
+    const mapper = makeSimplePersistMapperRaw({ obj }, defaults)
+    mapper.$reset()
+    obj.list.push(3)
+
+    expect(defaults.obj.list).toEqual([2])
+  })
+
+  it('should reset to the given defaults, not the initial state', () => {
+    const count = ref(5)
+    const obj = reactive({ foo: 'bar' })
+
+    const mapper = makeSimplePersistMapperRaw({ count, obj }, { count: 0, obj: { foo: 'baz' } })
+
+    mapper.$reset()
+
+    expect(count.value).toBe(0)
+    expect(obj.foo).toBe('baz')
+  })
+
+  it('should serialize and restore state', () => {
+    const count = ref(1)
+    const obj = reactive({ foo: 'bar' })
+
+    const mapper = makeSimplePersistMapperRaw({ count, obj }, { count: 0, obj: { foo: '' } })
+
+    expect(mapper.$serializeState()).toEqual({ count: 1, obj: { foo: 'bar' } })
+
+    mapper.$restoreState({ count: 2, obj: { foo: 'baz' } })
+
+    expect(count.value).toBe(2)
+    expect(obj.foo).toBe('baz')
   })
 })

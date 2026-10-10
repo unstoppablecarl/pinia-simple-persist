@@ -1,2 +1,2 @@
 export * from './plugin'
-export { makeSimplePersistMapper } from './mapper'
+export { makeSimplePersistMapper, makeSimplePersistMapperRaw } from './mapper'

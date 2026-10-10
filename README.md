@@ -35,7 +35,7 @@ app.mount('#app')
 ### Using The Mapper
 ```ts
 import { defineStore } from 'pinia'
-import { reactive, ref, toRaw } from 'vue'
+import { reactive, ref } from 'vue'
 import { makeSimplePersistMapper } from 'pinia-simple-persist'
 
 type SerializedData = {
@@ -59,33 +59,12 @@ export const useMyStore = defineStore('my', () => {
     obj,
   }
 
-  const defaults: SerializedData = {
-    name: name.value,
-    count: count.value,
-    obj: { ...toRaw(obj) },
-  }
+  // $reset() defaults are snapshotted from the current state values (deep copied)
+  // create the mapper before any state is modified
+  const { $reset, $serializeState, $restoreState } = makeSimplePersistMapper<SerializedData>(state)
 
-  const mapper = makeSimplePersistMapper<SerializedData>(
-    state,
-    defaults,
-  )
-
-  function $reset() {
-    // uses defaults to reset all state
-    mapper.$reset()
-  }
-
-  function $serializeState(): SerializedData {
-    return {
-      // unwraps reactive values for serialization
-      ...mapper.$serializeState(),
-    }
-  }
-
-  function $restoreState(data: SerializedData) {
-    // set all states from storage
-    mapper.$restoreState(data)
-  }
+  // optionally pass default values that override the snapshotted values
+  // const { $reset, $serializeState, $restoreState } = makeSimplePersistMapper<SerializedData>(state, { count: 10 })
 
   return {
     $reset,
@@ -100,8 +79,42 @@ export const useMyStore = defineStore('my', () => {
 })
 ```
 
+### Customizing
+Wrap any mapper method to add your own logic, for example migrating previously stored data.
+
+```ts
+const mapper = makeSimplePersistMapper<SerializedData>(state)
+
+function $restoreState(data: SerializedData & { title?: string }) {
+  // `name` was previously stored as `title`
+  if (data.title !== undefined) data.name = data.title
+  mapper.$restoreState(data)
+}
+
+return {
+  $reset: mapper.$reset,
+  $serializeState: mapper.$serializeState,
+  $restoreState,
+  name,
+  count,
+  obj,
+}
+```
+
+### Raw Mapper
+`makeSimplePersistMapperRaw` skips the state snapshot and uses only the defaults you give it.
+All keys are required.
+
+```ts
+const mapper = makeSimplePersistMapperRaw<SerializedData>(state, {
+  name: '',
+  count: 0,
+  obj: { foo: 'bar' },
+})
+```
+
 ### Manual
-This is the manual equivalent to the mapper above.
+This is the manual equivalent to the mappers above.
 
 ```ts
 export const useMyStore = defineStore('my', () => {
