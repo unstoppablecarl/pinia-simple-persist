@@ -1574,6 +1574,39 @@ describe('makeSimplePersistMapper', () => {
     expect(user.age).toBe(0)
   })
 
+  it('should not let ref state share references with defaults after reset', () => {
+    const data = ref({ nested: { value: 'initial' }, items: [1] })
+    const defaults = { data: { nested: { value: '' }, items: [] as number[] } }
+
+    const mapper = makeSimplePersistMapper({ data }, defaults)
+
+    mapper.$reset()
+    data.value.nested.value = 'changed'
+    data.value.items.push(2)
+
+    expect(defaults.data).toEqual({ nested: { value: '' }, items: [] })
+
+    mapper.$reset()
+
+    expect(data.value).toEqual({ nested: { value: '' }, items: [] })
+  })
+
+  it('should not let reactive state share references with defaults after reset', () => {
+    const settings = reactive({ theme: { color: 'red' } })
+    const defaults = { settings: { theme: { color: 'blue' } } }
+
+    const mapper = makeSimplePersistMapper({ settings }, defaults)
+
+    mapper.$reset()
+    settings.theme.color = 'green'
+
+    expect(defaults.settings.theme.color).toBe('blue')
+
+    mapper.$reset()
+
+    expect(settings.theme.color).toBe('blue')
+  })
+
   it('should handle plain values in restoreState', () => {
     const plainValue = { value: 42 } // Not a ref, not reactive, just a plain object with .value property
 
